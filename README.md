@@ -2,6 +2,8 @@
 
 Synthetic syllable-based time series on circles in high-dimensional space, with Markov switching dynamics.
 
+> **Screening task:** if you were sent here for the AI engineer screen, the task description is in [TASK.md](TASK.md).
+
 ## Overview
 
 This project generates a time series that mimics syllable-structured sequential data (like birdsong). A point traverses one of 10 circles embedded in 20-dimensional space, switching between circles according to a sparse Markov transition matrix. Each circle has a fixed angular velocity, producing distinct oscillation frequencies that serve as a signature for each "syllable."
