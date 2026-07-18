@@ -1,0 +1,14 @@
+{
+  "n_steps": 100000,
+  "n_circles": 10,
+  "ambient_dim": 20,
+  "radius_mean": 20.0,
+  "radius_std": 2.0,
+  "noise_std": 2.83,
+  "dwell_mean": 400,
+  "dwell_std": 100,
+  "min_period": 40,
+  "max_period": 400,
+  "subspace_dim": 4,
+  "seed": 42
+}
