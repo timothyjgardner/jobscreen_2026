@@ -1,9 +1,11 @@
 # Baseline results — INTERNAL, DO NOT SEND TO CANDIDATES
 
 This folder is the answer key for `TASK.md` (unsupervised syllable labeling of
-the subspace-dim-4 dataset). It documents seven baseline attempts, their
-scores, and how to use them when grading. **None of this should reach a
-candidate before or during the screen.**
+the subspace-dim-4 dataset). It documents two rounds of solution attempts —
+seven quick baselines (`baseline_check*.py`) and three stronger methods
+(`advanced_check*.py`, best ARI 0.994) — their scores, and how to use them
+when grading. **None of this should reach a candidate before or during the
+screen.**
 
 ## Setup
 
@@ -12,12 +14,14 @@ All scripts assume:
 - `data/` (repo root) contains the dataset generated with
   `python markov_circles_timeseries.py --subspace-dim 4` (the repo ships with
   exactly this; seed 42 makes regeneration byte-identical)
-- `numpy` and `scikit-learn` are installed
+- `numpy` and `scikit-learn` are installed; `advanced_check2.py` also needs
+  `torch` (CPU is fine) and `advanced_check3.py` needs `umap-learn`
 
 The scripts resolve the data path relative to their own location, so they run
 from anywhere, e.g. `python baselines-private/baseline_check7.py` from the
-repo root. Each runs in a few seconds on CPU and prints ARI/NMI against the
-ground-truth `states` array.
+repo root. The `baseline_check*` scripts run in a few seconds on CPU; the
+advanced ones take seconds (#1, #3) to ~5 minutes (#2, training). All print
+ARI/NMI against the ground-truth `states` array.
 
 ## Results (100,000 steps, 10 syllables, true segment count 251)
 
@@ -48,12 +52,57 @@ ground-truth `states` array.
   dwell times are long (~400 steps) and switches are discrete, so decoding
   with a switching penalty (Viterbi/HMM-style) and refitting features over
   whole decoded segments cleans up the boundaries. `baseline_check7.py`
-  reaches 0.86 and recovers 260 segments vs. 251 true. There is headroom
-  above this (proper ARHMM/SLDS, learned sequence embeddings), so scores
-  near 0.9+ are plausible for excellent candidates.
+  reaches 0.86 and recovers 260 segments vs. 251 true.
 
 The calibration line in TASK.md ("naive plateaus at 0.4–0.5, well-designed
 methods exceed 0.8") comes directly from this table.
+
+## Round 2 — stronger unsupervised methods (`advanced_check*.py`)
+
+A second pass with heavier machinery, to establish the ceiling and to check
+whether the deep-learning route is competitive.
+
+| Script | Approach | ARI | NMI |
+|---|---|---|---|
+| `advanced_check1.py` | **Switching AR(2) HMM** in the 4D PCA space: EM with a sticky transition prior, Viterbi decode, minimum-dwell cleanup, then per-segment plane/speed re-clustering | **0.994** | **0.991** |
+| `advanced_check2.py` | **Deep contrastive embedding**: conv encoder on 128-step windows, InfoNCE with temporal-proximity positives (25 epochs, CPU), k-means + sticky Viterbi + segment refit | 0.904 | 0.902 |
+| `advanced_check3.py` | **UMAP + GMM done right**: UMAP of window-level dynamics features (not raw points!) → full-covariance GMM → sticky Viterbi | 0.810 | 0.831 |
+
+Notes per method:
+
+- **ARHMM (`advanced_check1.py`) essentially solves the task.** It is the
+  model class matched to the generative process: within a syllable the signal
+  is a noisy sinusoid in a fixed plane (captured exactly by a vector AR(2)),
+  and switches are rare and discrete (captured by the sticky HMM backbone).
+  Initialised from the window-feature k-means (ARI 0.76), EM converges in ~7
+  iterations and localises **boundaries to median 0 / 90th-pct 2 steps**.
+  Two post-passes matter: (1) minimum-dwell cleanup (no true visit is shorter
+  than 40 steps) fixes segment count to exactly 251/251; (2) EM sometimes
+  lets one AR state host two circles — re-clustering plane+speed features
+  over the decoded segments fixes the identities, taking ARI 0.91 → 0.994
+  (per-step matched accuracy 99.7%, perfectly diagonal confusion matrix).
+  Runtime ~8 s. This is within reach of a strong candidate using an LLM to
+  draft the EM machinery.
+- **Contrastive embedding (`advanced_check2.py`)** shows the generic deep
+  route works with zero domain features: positives are simply the same
+  trajectory 10–60 steps later. It cleanly beats every classic baseline
+  (0.90 vs 0.86) and recovers 251/251 segments, but its boundary resolution
+  is limited by the 128-step window, so it cannot catch the ARHMM. More
+  epochs helped (15 → 25 epochs: 0.85 → 0.90); further training/architecture
+  tuning would likely add a little more.
+- **UMAP + GMM (`advanced_check3.py`)** is included deliberately: TASK.md
+  tells candidates UMAP-on-raw-points fails, and this shows the fix is the
+  representation, not the algorithm — the same UMAP+clustering applied to
+  window dynamics features scores 0.81. Two practical details: larger
+  `n_neighbors` (50) matters, and raw GMM log-likelihoods must be converted
+  to capped relative costs before Viterbi or the switch penalty is
+  meaningless.
+
+Updated headroom statement for grading: the task ceiling is ARI ≈ 0.99+
+(ARHMM), not ~0.86 as Round 1 suggested. A candidate reporting 0.95+ with a
+switching-dynamics model has genuinely nailed it; 0.85–0.95 indicates a
+strong solution with imperfect boundaries or state identities; the TASK.md
+tier boundaries (0.5 / 0.8) remain valid.
 
 ## Debrief prompts
 
@@ -75,8 +124,8 @@ Useful questions regardless of the candidate's score:
 ## Caveats
 
 - Scores above are for seed-42 data with `n_init` and thresholds as written;
-  reruns and minor tweaks move ARI by a few points. Judge the tier, not the
-  third decimal.
+  reruns and minor tweaks move ARI by a few points (the torch run is also
+  hardware-dependent). Judge the tier, not the third decimal.
 - A candidate whose method lands at 0.7 with a sharp failure analysis and a
   clear plan for the boundary problem is a stronger signal than one at 0.85
   who can't explain why refitting segments helps.
