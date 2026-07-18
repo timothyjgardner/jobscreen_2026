@@ -15,6 +15,7 @@ Pipeline:
   4. Viterbi decode, evaluate ARI / NMI / boundary accuracy.
 """
 
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -24,7 +25,11 @@ from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
 
 rng = np.random.default_rng(0)
 
-npz = np.load(Path(__file__).resolve().parent.parent / 'data' / 'data.npz')
+# optional argument: directory containing data.npz (defaults to repo data/,
+# i.e. the shipped subspace-4 dataset); used for robustness tests on variants
+data_dir = (Path(sys.argv[1]) if len(sys.argv) > 1
+            else Path(__file__).resolve().parent.parent / 'data')
+npz = np.load(data_dir / 'data.npz')
 X = npz['X']
 states = npz['states']
 T = len(X)

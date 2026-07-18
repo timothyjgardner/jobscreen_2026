@@ -104,6 +104,40 @@ switching-dynamics model has genuinely nailed it; 0.85–0.95 indicates a
 strong solution with imperfect boundaries or state identities; the TASK.md
 tier boundaries (0.5 / 0.8) remain valid.
 
+### Robustness test: subspace_dim = 3 (heavier overlap)
+
+We regenerated the dataset with `--subspace-dim 3 --no-umap` (10 circle
+planes packed into 3D — every pair of planes intersects along a line) and
+ran `advanced_check1.py` on it **unchanged**, no retuning:
+
+| Stage | subspace_dim=4 | subspace_dim=3 |
+|---|---|---|
+| init (window k-means) | 0.76 | 0.72 |
+| ARHMM Viterbi (cleaned) | 0.91 | 0.90 |
+| + segment refit | **0.994** | **0.90** |
+| boundary error (median / 90th pct) | 0 / 2 steps | 0 / 20 steps |
+| matched per-step accuracy | 99.7% | 92.4% |
+
+Degradation is graceful and highly localised: the confusion matrix stays
+perfectly diagonal for **9 of 10 circles**, and essentially all the lost ARI
+comes from circle 4 (period 200) being absorbed into circle 3's state
+(period 160). We verified the cause geometrically: in the seed-42 subspace-3
+draw, planes 3 and 4 are the closest pair in the whole set — largest
+principal angle only 16° (next-closest pair: 24°) — while also being
+adjacent in frequency (period ratio 1.25). Both identity channels are weak
+at once for exactly this pair. Segment count stays
+almost exact (259 vs. 251 true) and boundaries stay sharp, so it is a state-
+*identity* failure, not a segmentation failure. Re-weighting frequency in
+the segment-refit features did not separate the pair (0.901), so fixing it
+would need a genuinely better identity model (e.g. splitting candidate
+merged states and testing likelihood improvement).
+
+Implications: the task is still very solvable at subspace_dim 3 (ARI 0.90
+with an untuned pipeline), which supports offering it as the harder stretch
+variant in TASK.md. `advanced_check1.py` now accepts an optional data-dir
+argument for exactly this kind of variant testing:
+`python baselines-private/advanced_check1.py /path/to/variant/data`.
+
 ## Debrief prompts
 
 Useful questions regardless of the candidate's score:
